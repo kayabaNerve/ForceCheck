@@ -1,6 +1,10 @@
 import ../ForceCheck
 
-proc basic() {.forceCheck: [KeyError].} =
+proc basic1() {.forceCheck: [].} =
+    discard
+
+proc basic2() {.forceCheck: [KeyError].} =
     raise newException(KeyError, "")
 
-basic()
+basic1()
+basic2()

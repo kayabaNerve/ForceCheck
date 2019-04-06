@@ -33,6 +33,37 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
     #Copy the caller arg.
     var caller = copy(callerArg)
 
+    #Create arrays for both recoverable/irrecoverable exceptions, and just irrecoverable.
+    var
+        both: NimNode = newNimNode(nnkBracket)
+        irrecoverable: NimNode = newNimNode(nnkBracket)
+
+
+    if exceptions.len > 0:
+        #Check if recoverable/irrecoverable was specified.
+        if exceptions[0].kind == nnkExprColonExpr:
+            case exceptions[0][0].strVal:
+                of "recoverable":
+                    for i in 1 ..< exceptions[0].len:
+                        both.add(exceptions[0][i])
+                of "irrecoverable":
+                    for i in 1 ..< exceptions[0].len:
+                        both.add(exceptions[0][i])
+                        irrecoverable.add(exceptions[0][i])
+            #Allow passing just irrecoverable.
+            if exceptions.len > 1:
+                case exceptions[1][0].strVal:
+                    of "recoverable":
+                        for i in 1 ..< exceptions[1].len:
+                            both.add(exceptions[1][i])
+                    of "irrecoverable":
+                        for i in 1 ..< exceptions[1].len:
+                            both.add(exceptions[1][i])
+                            irrecoverable.add(exceptions[1][i])
+        #If types weren't specified, just set both to exceptions.
+        else:
+            both = exceptions
+
     #Rename it.
     caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
 
@@ -44,11 +75,11 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             newIdentNode(
                 "raises"
             ),
-            exceptions
+            both
         )
     )
 
-    #Add a blank raises to the copy.
+    #Add a raises to the copy of just the irrecoverable errors.
     caller.addPragma(
         newNimNode(
             nnkExprColonExpr
@@ -56,7 +87,7 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             newIdentNode(
                 "raises"
             ),
-            newNimNode(nnkBracket)
+            irrecoverable
         )
     )
 
