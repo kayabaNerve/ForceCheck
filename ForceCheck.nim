@@ -94,7 +94,7 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
     #Replace every raises in the copy with a discard statement.
     replace(caller, 6)
 
-    #Add the modified proc to the start of the original proc, inside a Block to disable XDeclaredButNotUsed hints.
+    #Add the modified proc to the start of the original proc, inside a block to disable XDeclaredButNotUsed hints.
     callerArg[6].insert(
         0,
         newNimNode(
@@ -115,9 +115,7 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
                     newIdentNode("off")
                 ),
             ),
-            newStmtList(
-                caller
-            )
+            caller
         )
     )
 
