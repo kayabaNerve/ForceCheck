@@ -38,7 +38,7 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         both: NimNode = newNimNode(nnkBracket)
         irrecoverable: NimNode = newNimNode(nnkBracket)
 
-
+    #Check to make sure this isn't an empty array.
     if exceptions.len > 0:
         #Check if recoverable/irrecoverable was specified.
         if exceptions[0].kind == nnkExprColonExpr:
@@ -94,28 +94,31 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
     #Replace every raises in the copy with a discard statement.
     replace(caller, 6)
 
-    #Add the modified proc to the start of the original proc, inside a block to disable XDeclaredButNotUsed hints.
+    #Add the modified proc to the start of the original proc, inside a block to disable all hints.
     callerArg[6].insert(
         0,
         newNimNode(
-            nnkPragmaBlock
+            nnkPragma
         ).add(
+            newIdentNode("pop")
+        )
+    )
+    callerArg[6].insert(
+        0,
+        caller
+    )
+    callerArg[6].insert(
+        0,
+        newNimNode(
+            nnkPragma
+        ).add(
+            newIdentNode("push"),
             newNimNode(
-                nnkPragma
+                nnkExprColonExpr
             ).add(
-                newNimNode(
-                    nnkExprColonExpr
-                ).add(
-                    newNimNode(
-                        nnkBracketExpr
-                    ).add(
-                        newIdentNode("hint"),
-                        newIdentNode("XDeclaredButNotUsed")
-                    ),
-                    newIdentNode("off")
-                ),
+                newIdentNode("hints"),
+                newIdentNode("off")
             ),
-            caller
         )
     )
 
