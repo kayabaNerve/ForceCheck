@@ -93,6 +93,12 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             irrecoverable
         )
     )
+    #Also add the used pragma.
+    caller.addPragma(
+        newIdentNode(
+            "used"
+        )
+    )
 
     #Replace every raises in the copy with a discard statement.
     replace(caller, 6)
