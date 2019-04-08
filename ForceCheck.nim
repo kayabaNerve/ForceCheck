@@ -65,7 +65,10 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             both = exceptions
 
     #Rename it.
-    caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
+    if caller[0].kind == nnkPostfix:
+        caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
+    else:
+        caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
 
     #Add a proper raises pragma to the original function.
     callerArg.addPragma(

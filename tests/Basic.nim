@@ -1,6 +1,6 @@
 import ../ForceCheck
 
-proc empty() {.forceCheck: [].} =
+proc empty*() {.forceCheck: [].} =
     discard
 
 proc unneeded() {.forceCheck: [OSError].} =
@@ -9,6 +9,20 @@ proc unneeded() {.forceCheck: [OSError].} =
 proc raises() {.forceCheck: [KeyError].} =
     raise newException(KeyError, "")
 
+func funcEmpty() {.forceCheck: [].} =
+    discard
+
+func funcUnneeded*() {.forceCheck: [OSError].} =
+    discard
+
+func funcRaises() {.forceCheck: [KeyError].} =
+    raise newException(KeyError, "")
+
 empty()
 unneeded()
+
+funcEmpty()
+funcUnneeded()
+
 raises()
+funcRaises()
