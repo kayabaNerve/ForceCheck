@@ -1,20 +1,23 @@
 #Macros lib.
 import macros
 
-#The macro wasn't handling raise statements inside except blocks (ones without newException); this is a workaround.
-template fcRaise*(): untyped =
-    raise getCurrentException()
+#Manual `raise` that's compatible with `raises` statements.
 template fcRaise*(exception: untyped): untyped =
     raise (ref exception)(getCurrentException())
 
 #Recursively replaces every raise statement in the NimNode with a discard.
+#This function also checks to make sure there's no generic excepts.
 proc replace(parent: NimNode, index: int) {.compileTime.} =
+    #If this is an except branch, without specifying an error, error.
+    if (parent[index].kind == nnkExceptBranch) and (parent[index].len == 1):
+        raise newException(Exception, "Except branches must specify an Exception.")
+
     #If this is a raise statement, replace it with a discard statement.
     if parent[index].kind == nnkRaiseStmt:
         parent[index] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
         return
 
-    #If this is a fcRaise statement without an Exception, replace it .
+    #If this is a fcRaise statement without an Exception, replace it.
     if (parent[index].kind == nnkIdent) and (parent[index].strVal == "fcRaise"):
         parent[index] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
         return
@@ -44,22 +47,21 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         if exceptions[0].kind == nnkExprColonExpr:
             case exceptions[0][0].strVal:
                 of "recoverable":
-                    for i in 1 ..< exceptions[0].len:
-                        both.add(exceptions[0][i])
+                    for i in 0 ..< exceptions[0][1].len:
+                        both.add(exceptions[0][1][i])
                 of "irrecoverable":
-                    for i in 1 ..< exceptions[0].len:
-                        both.add(exceptions[0][i])
-                        irrecoverable.add(exceptions[0][i])
+                    for i in 0 ..< exceptions[0][1].len:
+                        both.add(exceptions[0][1][i])
+                        irrecoverable.add(exceptions[0][1][i])
             #Allow passing just irrecoverable.
             if exceptions.len > 1:
-                case exceptions[1][0].strVal:
-                    of "recoverable":
-                        for i in 1 ..< exceptions[1].len:
-                            both.add(exceptions[1][i])
-                    of "irrecoverable":
-                        for i in 1 ..< exceptions[1].len:
-                            both.add(exceptions[1][i])
-                            irrecoverable.add(exceptions[1][i])
+                if exceptions[1][0].strVal == "recoverable":
+                    for i in 0 ..< exceptions[1][1].len:
+                        both.add(exceptions[1][1][i])
+                else:
+                    for i in 0 ..< exceptions[1][1].len:
+                        both.add(exceptions[1][1][i])
+                        irrecoverable.add(exceptions[1][1][i])
         #If types weren't specified, just set both to exceptions.
         else:
             both = exceptions

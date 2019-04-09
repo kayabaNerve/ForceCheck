@@ -1,24 +1,34 @@
 import ../ForceCheck
 
 proc called(a: int) {.forceCheck: [
-    recoverable:
-        ValueError,
-    irrecoverable:
+    recoverable: [
+        KeyError,
+        ValueError
+    ],
+    irrecoverable: [
         OSError
+    ]
 ].} =
     if a == 0:
-        raise newException(ValueError, "This is a KeyError.")
+        raise newException(KeyError, "This is a KeyError.")
+    elif a == 1:
+        raise newException(ValueError, "This is a ValueError.")
     else:
         raise newException(OSError, "")
 
 proc caller() {.forceCheck: [
-    recoverable:
-        ValueError,
-    irrecoverable:
+    recoverable: [
+        KeyError,
+        ValueError
+    ],
+    irrecoverable: [
         OSError
+    ]
 ].} =
     try:
         called(0)
+    except KeyError:
+        fcRaise KeyError
     except ValueError:
         fcRaise ValueError
 

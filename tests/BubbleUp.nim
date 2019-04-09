@@ -4,17 +4,17 @@ proc called(a: int) {.forceCheck: [KeyError, ValueError].} =
     if a == 0:
         raise newException(KeyError, "This is a KeyError.")
     else:
-        raise newException(ValueError, "This is a KeyError.")
+        raise newException(ValueError, "This is a ValueError.")
 
-proc caller() {.forceCheck: [KeyError, Exception].} =
+proc caller() {.forceCheck: [KeyError, ValueError].} =
     try:
         called(0)
-    except:
+    except KeyError, ValueError:
         fcRaise KeyError
 
     try:
         called(1)
-    except:
-        fcRaise
+    except KeyError, ValueError:
+        fcRaise ValueError
 
 caller()
