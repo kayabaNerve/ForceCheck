@@ -65,6 +65,8 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
     #Rename it.
     if caller[0].kind == nnkPostfix:
         caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
+    elif caller[0].kind == nnkAccQuoted:
+        caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
     else:
         caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
 
