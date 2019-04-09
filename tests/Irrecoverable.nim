@@ -27,9 +27,9 @@ proc caller() {.forceCheck: [
 ].} =
     try:
         called(0)
-    except KeyError:
-        fcRaise KeyError
-    except ValueError:
-        fcRaise ValueError
+    except KeyError as e:
+        raise e
+    except ValueError as e:
+        raise e
 
 caller()

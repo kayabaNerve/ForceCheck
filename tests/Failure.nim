@@ -5,5 +5,3 @@ proc called() {.forceCheck: [KeyError].} =
 
 proc failure() {.forceCheck: [KeyError, ValueError].} =
     called()
-
-failure()

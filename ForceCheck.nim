@@ -1,10 +1,6 @@
 #Macros lib.
 import macros
 
-#Manual `raise` that's compatible with `raises` statements.
-template fcRaise*(exception: untyped): untyped =
-    raise (ref exception)(getCurrentException())
-
 #Recursively replaces every raise statement in the NimNode with a discard.
 #This function also checks to make sure there's no generic excepts.
 proc replace(parent: NimNode, index: int) {.compileTime.} =

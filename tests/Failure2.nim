@@ -8,5 +8,3 @@ proc failure() {.forceCheck: [KeyError].} =
         called()
     except:
         discard
-
-failure()
