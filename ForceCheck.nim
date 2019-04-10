@@ -63,10 +63,26 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             both = exceptions
 
     #Rename it.
+    #If this is a postfix, it's either a public function or an public operator.
     if caller[0].kind == nnkPostfix:
-        caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
+        #Check if it's an operator.
+        var op: bool = false
+        for c in 0 ..< caller[0].len:
+            if caller[0][c].kind == nnkAccQuoted:
+                op = true
+                caller[0] = newNimNode(
+                    nnkAccQuoted
+                ).add(
+                    newIdentNode(caller[0][c][0].strVal & "_forceCheck")
+                )
+
+        #If it's not an operator, handle it as a public function.
+        if not op:
+            caller[0] = newIdentNode(caller[0][1].strVal & "_forceCheck")
+    #If it's not a public operator...
     elif caller[0].kind == nnkAccQuoted:
         caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
+    #If it's a regular function...
     else:
         caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
 

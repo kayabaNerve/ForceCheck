@@ -24,7 +24,7 @@ func funcUnneeded() {.forceCheck: [OSError].} =
     discard
 func funcMultitype(a: int or string) {.forceCheck: [].} =
     discard
-func `@`(a: int) {.forceCheck: [].} =
+func `@`*(a: int) {.forceCheck: [].} =
     discard
 
 func funcRaises() {.forceCheck: [KeyError].} =
