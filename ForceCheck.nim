@@ -63,8 +63,11 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             both = exceptions
 
     #Rename it.
+    #If it's empty, it's a nameless function.
+    if caller[0].kind == nnkEmpty:
+        caller[0] = newIdentNode("empty_forceCheck")
     #If this is a postfix, it's either a public function or an public operator.
-    if caller[0].kind == nnkPostfix:
+    elif caller[0].kind == nnkPostfix:
         #Check if it's an operator.
         var op: bool = false
         for c in 0 ..< caller[0].len:
@@ -119,6 +122,12 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
     #Replace every raises in the copy with a discard statement.
     replace(caller, 6)
 
+    #If the function is a lambda, change the cloned function to a proc.
+    if callerArg.kind == nnkLambda:
+        var callerProc: NimNode = newNimNode(nnkProcDef)
+        caller.copyChildrenTo(callerProc)
+        caller = callerProc
+
     #Add the modified proc to the start of the original proc, inside a block to disable all hints.
     callerArg[6].insert(
         0,
@@ -147,4 +156,5 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         )
     )
 
+    echo treeRepr(callerArg)
     return callerArg
