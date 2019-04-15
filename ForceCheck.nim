@@ -156,5 +156,4 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         )
     )
 
-    echo treeRepr(callerArg)
     return callerArg
