@@ -13,16 +13,6 @@ proc replace(parent: NimNode, index: int) {.compileTime.} =
         parent[index] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
         return
 
-    #If this is a fcRaise statement without an Exception, replace it.
-    if (parent[index].kind == nnkIdent) and (parent[index].strVal == "fcRaise"):
-        parent[index] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
-        return
-
-    #If this is a fcRaise statement with an Exception, replace it.
-    if (parent[index].kind == nnkCommand) and (parent[index][0].strVal == "fcRaise"):
-        parent[index] = newNimNode(nnkDiscardStmt).add(newEmptyNode())
-        return
-
     #Iterate over every child and do the same there.
     for i in 0 ..< parent[index].len:
         replace(parent[index], i)
