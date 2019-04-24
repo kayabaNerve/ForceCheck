@@ -1,10 +1,71 @@
 #Macros lib.
 import macros
 
+#Return the name of a function.
+proc getName(
+    function: NimNode
+): string {.compileTime.} =
+    #If it's a lambda, the function has no name.
+    if function[0].kind == nnkEmpty:
+        result = "lambda"
+    #If it's a private operator...
+    elif function[0].kind == nnkAccQuoted:
+        result = function[0][0].strVal
+    #If this is a postfix, it's either a public function or an public operator.
+    elif function[0].kind == nnkPostfix:
+        #Check if it's an operator.
+        for c in 0 ..< function[0].len:
+            #If it is, return the operator's strVal.
+            if function[0][c].kind == nnkAccQuoted:
+                return function[0][c][0].strVal
+
+        #If it's not an operator, it's a public function.
+        result = function[0][1].strVal
+    #If it's a regular function...
+    else:
+        result = function[0].strVal
+
+#Rename a proc to the passed string.
+proc rename(
+    function: var NimNode,
+    nameArg: string
+) {.compileTime.} =
+    var name: NimNode = newIdentNode(nameArg)
+
+    #If the lambda was defined using proc, it's of nnkLambda.
+    #If it was defined using func, it's of nnkFuncDef.
+    #If it's a lambda, which shouldn't be named, convert it to a proc.
+    if function.kind == nnkLambda:
+        var functionCopy: NimNode = newNimNode(nnkProcDef)
+        function.copyChildrenTo(functionCopy)
+        function = functionCopy
+
+    #If it's a private operator, rename it, but preserve it as an operator.
+    if function[0].kind == nnkAccQuoted:
+        function[0] = newNimNode(
+            nnkAccQuoted
+        ).add(name)
+        return
+    #If this function's name node is postfix, it's either a public function or an public operator.
+    elif function[0].kind == nnkPostfix:
+        #Check if it's an operator.
+        for c in 0 ..< function[0].len:
+            #If it is, rename it, but preserve it as an operator.
+            if function[0][c].kind == nnkAccQuoted:
+                function[0] = newNimNode(
+                    nnkAccQuoted
+                ).add(name)
+                return
+
+    #Or, if it's not an operator, just overwrite it with a standard ident node.
+    function[0] = name
+
 #Recursively replaces every raise statement in the NimNode with a discard.
-#Also replace every `await` with `waitFor` so the copied function is guaranteed synchronous.
-#This function also checks to make sure there's no generic excepts.
-proc replace(parent: NimNode, index: int) {.compileTime.} =
+#This function also checks to make sure there's no generic excepts (`except:`).
+proc removeRaises(
+    parent: NimNode,
+    index: int
+) {.compileTime.} =
     #If this is an except branch, without specifying an error, error.
     if (parent[index].kind == nnkExceptBranch) and (parent[index].len == 1):
         raise newException(Exception, "Except branches must specify an Exception.")
@@ -16,23 +77,78 @@ proc replace(parent: NimNode, index: int) {.compileTime.} =
         parent[index] = replacement
         return
 
+    #Iterate over every child and do the same there.
+    for i in 0 ..< parent[index].len:
+        removeRaises(parent[index], i)
+
+#Recursively replaces every `await` with `waitFor` so the copied function is guaranteed synchronous.
+#This is needed as every async proc raises `Exception`, and raises is purposeless when it includes Exception.
+proc removeAsync(
+    parent: NimNode,
+    index: int
+) {.compileTime.} =
     #If this is an `await`, replace it with a `waitFor`.
     if (parent[index].kind == nnkIdent) and (parent[index].strVal == "await"):
         parent[index] = newIdentNode("waitFor")
 
     #Iterate over every child and do the same there.
     for i in 0 ..< parent[index].len:
-        replace(parent[index], i)
+        parent[index].removeAsync(i)
 
 #Make sure the proc/func doesn't allow any Exceptions to bubble up.
-macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
+macro forceCheck*(
+    exceptions: untyped,
+    original: untyped
+): untyped =
     var
-        #Copy the caller arg.
-        caller: NimNode = copy(callerArg)
+        #Boolean of whether or not this function is async.
+        async: bool
+        #Copy the original function.
+        copy: NimNode = copy(original)
+        #Define a second copy if this is async (explained below).
+        asyncCopy: NimNode
         #Create arrays for both recoverable/irrecoverable exceptions, and just irrecoverable.
         both: NimNode = newNimNode(nnkBracket)
         irrecoverable: NimNode = newNimNode(nnkBracket)
 
+    #Rename it.
+    copy.rename(original.getName() & "_forceCheck")
+
+    #Add the used pragma.
+    copy.addPragma(
+        newIdentNode(
+            "used"
+        )
+    )
+
+    #If this is an async proc, remove any traces of async from the copy.
+    for pragma in original[4]:
+        if (pragma.kind == nnkIdent) and (pragma.strVal == "async"):
+            async = true
+    if async:
+        #Remove the async pragma.
+        for p in 0 ..< copy[4].len:
+            if (copy[4][p].kind == nnkIdent) and (copy[4][p].strVal == "async"):
+                copy[4].del(p)
+                break
+
+        #Remove the Future[T] from the copy.
+        if copy[3][0].kind != nnkEmpty:
+            copy[3][0] = copy[3][0][1]
+
+        #Remove awaits.
+        copy.removeAsync(6)
+
+        #Create a second copy. Why?
+        #Generally, the original function gets the proper raises pragma, and the copy gets its raises replaced with discards and a blank raises pragma.
+        #If it is async, any raises pragma would be forced to include Exception, which would make it purposeless.
+        #The solution to this, is create two copies.
+        #As before, one raises nothing and has a blank raises. The other is untouched, other than it being made synchronous, and contains the proper raises pragma.
+        #The first checks bubble up, the second checks that all possible Exceptions were placed in forceCheck (guaranteeing it's a drop-in replacement for raises).
+        asyncCopy = copy(copy)
+        asyncCopy.rename(original.getName() & "_asyncForceCheck")
+
+    #Grab the Exceptions.
     #Check to make sure this isn't an empty array.
     if exceptions.len > 0:
         #Check if recoverable/irrecoverable was specified.
@@ -59,48 +175,20 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         else:
             both = exceptions
 
-    #Rename it.
-    #If it's a lambda, the function has no name.
-    if caller[0].kind == nnkEmpty:
-        caller[0] = newIdentNode("lambda_forceCheck")
-
-        #If the lambda was defined using proc, it's of nnkLambda.
-        #If it was defined using func, it's of nnkFuncDef.
-        #We can insert a nnkProcDef or nnkFuncDef into a function, not a raw lambda.
-        if caller.kind == nnkLambda:
-            var callerCopy: NimNode = newNimNode(nnkProcDef)
-            caller.copyChildrenTo(callerCopy)
-            caller = callerCopy
-    #If it's a private operator...
-    elif caller[0].kind == nnkAccQuoted:
-        caller[0] = newIdentNode(caller[0][0].strVal & "_forceCheck")
-    #If this is a postfix, it's either a public function or an public operator.
-    elif caller[0].kind == nnkPostfix:
-        #Check if it's an operator.
-        var op: bool = false
-        for c in 0 ..< caller[0].len:
-            if caller[0][c].kind == nnkAccQuoted:
-                op = true
-                caller[0] = newNimNode(
-                    nnkAccQuoted
-                ).add(
-                    newIdentNode(caller[0][c][0].strVal & "_forceCheck")
-                )
-
-        #If it's not an operator, handle it as a public function.
-        if not op:
-            caller[0] = newIdentNode(caller[0][1].strVal & "_forceCheck")
-    #If it's a regular function...
-    else:
-        caller[0] = newIdentNode(caller[0].strVal & "_forceCheck")
-
-    #If the original function isn't async, add a proper raises pragma.
-    var async: bool = false
-    for pragma in callerArg[4]:
-        if (pragma.kind == nnkIdent) and (pragma.strVal == "async"):
-            async = true
+    #Add the proper pragma to the original function if it's not async, or the asyncCopy if the original is.
     if not async:
-        callerArg.addPragma(
+        original.addPragma(
+            newNimNode(
+                nnkExprColonExpr
+            ).add(
+                newIdentNode(
+                    "raises"
+                ),
+                both
+            )
+        )
+    else:
+        asyncCopy.addPragma(
             newNimNode(
                 nnkExprColonExpr
             ).add(
@@ -112,7 +200,7 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         )
 
     #Add a raises to the copy of just the irrecoverable errors.
-    caller.addPragma(
+    copy.addPragma(
         newNimNode(
             nnkExprColonExpr
         ).add(
@@ -122,29 +210,12 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             irrecoverable
         )
     )
-    #Also add the used pragma.
-    caller.addPragma(
-        newIdentNode(
-            "used"
-        )
-    )
-
-    #If the original function was async, remove async from the copy.
-    if async:
-        for p in 0 ..< caller[4].len:
-            if (caller[4][p].kind == nnkIdent) and (caller[4][p].strVal == "async"):
-                caller[4].del(p)
-                break
-
-        #Also remove the Future[T] from the copy.
-        if caller[3][0].kind != nnkEmpty:
-            caller[3][0] = caller[3][0][1]
 
     #Replace every raises in the copy with a discard statement.
-    replace(caller, 6)
+    copy.removeRaises(6)
 
-    #Add the modified proc to the start of the original proc, inside a block to disable all hints.
-    callerArg[6].insert(
+    #Add the copy (or copies) to the start of the original proc, inside a block to disable all hints.
+    original[6].insert(
         0,
         newNimNode(
             nnkPragma
@@ -152,11 +223,18 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
             newIdentNode("pop")
         )
     )
-    callerArg[6].insert(
+
+    if not asyncCopy.isNil:
+        original[6].insert(
+            0,
+            asyncCopy
+        )
+    original[6].insert(
         0,
-        caller
+        copy
     )
-    callerArg[6].insert(
+
+    original[6].insert(
         0,
         newNimNode(
             nnkPragma
@@ -171,4 +249,4 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
         )
     )
 
-    return callerArg
+    return original
