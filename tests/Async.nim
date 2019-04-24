@@ -11,6 +11,9 @@ proc called(x: int) {.forceCheck: [
     elif x == 1:
         raise newException(IOError, "1")
 
+proc returning(x: int): Future[int] {.forceCheck: [], async.} =
+    result = x
+
 proc caller() {.forceCheck: [
     ValueError,
     IndexError
@@ -21,7 +24,12 @@ proc caller() {.forceCheck: [
         echo e.msg
     except IOError as e:
         echo e.msg
-    except Exception as e:
-        echo e.msg
+    except Exception:
+        echo "Exception."
+
+    try:
+        echo await returning(5)
+    except Exception:
+        echo "Exception"
 
 waitFor caller()

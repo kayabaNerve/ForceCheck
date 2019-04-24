@@ -136,6 +136,10 @@ macro forceCheck*(exceptions: untyped, callerArg: untyped): untyped =
                 caller[4].del(p)
                 break
 
+        #Also remove the Future[T] from the copy.
+        if caller[3][0].kind != nnkEmpty:
+            caller[3][0] = caller[3][0][1]
+
     #Replace every raises in the copy with a discard statement.
     replace(caller, 6)
 
