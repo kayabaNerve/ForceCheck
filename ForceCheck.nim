@@ -214,7 +214,15 @@ macro forceCheck*(
     #Replace every raises in the copy with a discard statement.
     copy.removeRaises(6)
 
-    #Add the copy (or copies) to the start of the original proc, inside a block to disable all hints.
+    #Add the copy (or copies) to the start of the original proc.
+    if not asyncCopy.isNil:
+        original[6].insert(
+            0,
+            asyncCopy
+        )
+
+    #Place the copy which stops bubble up in a hint block in order to stop duplicate hints.
+    #The async copy is not placed in this block so unused Exceptions produce a hint.
     original[6].insert(
         0,
         newNimNode(
@@ -224,11 +232,6 @@ macro forceCheck*(
         )
     )
 
-    if not asyncCopy.isNil:
-        original[6].insert(
-            0,
-            asyncCopy
-        )
     original[6].insert(
         0,
         copy

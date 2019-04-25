@@ -2,22 +2,28 @@ import ../ForceCheck
 
 import asyncdispatch
 
-proc called(x: int) {.forceCheck: [
+proc called(
+    x: int
+) {.forceCheck: [
     ValueError,
     IndexError
 ], async.} =
     if x == 0:
         raise newException(ValueError, "0")
     elif x == 1:
-        raise newException(IOError, "1")
+        raise newException(IndexError, "1")
 
-proc returning(x: int): Future[int] {.forceCheck: [], async.} =
+proc returning(
+    x: int
+): Future[int] {.forceCheck: [], async.} =
     result = x
 
-proc caller() {.forceCheck: [
-    ValueError,
-    IndexError
+proc unneeded() {.forceCheck: [
+    ValueError
 ], async.} =
+    return
+
+proc caller() {.forceCheck: [], async.} =
     try:
         await called(0)
     except ValueError as e:
@@ -31,5 +37,10 @@ proc caller() {.forceCheck: [
         echo await returning(5)
     except Exception:
         echo "Exception"
+
+    try:
+        await unneeded()
+    except Exception:
+        discard
 
 waitFor caller()
