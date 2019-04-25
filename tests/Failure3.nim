@@ -2,7 +2,9 @@ import ../ForceCheck
 
 import asyncdispatch
 
-proc called(x: int) {.forceCheck: [], async.} =
+proc called(
+    x: int
+) {.forceCheck: [], async.} =
     if x == 0:
         raise newException(ValueError, "0")
     elif x == 1:

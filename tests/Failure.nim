@@ -1,7 +1,11 @@
 import ../ForceCheck
 
-proc called() {.forceCheck: [KeyError].} =
+proc called() {.forceCheck: [
+    KeyError
+].} =
     raise newException(KeyError, "This is a KeyError.")
 
-proc failure() {.forceCheck: [KeyError, ValueError].} =
+proc failure() {.forceCheck: [
+    KeyError
+].} =
     called()

@@ -1,6 +1,8 @@
 import ../ForceCheck
 
-proc called(a: int) {.forceCheck: [
+proc called(
+    a: int
+) {.forceCheck: [
     recoverable: [
         KeyError,
         ValueError

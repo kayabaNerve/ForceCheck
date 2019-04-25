@@ -2,52 +2,78 @@ import ../ForceCheck
 
 proc empty() {.forceCheck: [].} =
     discard
+
 proc publicEmpty*() {.forceCheck: [].} =
     discard
-proc unneeded() {.forceCheck: [OSError].} =
+
+proc unneeded() {.forceCheck: [
+    OSError
+].} =
     discard
-proc multitype(a: int or string) {.forceCheck: [].} =
+
+proc multitype(
+    a: int or string)
+ {.forceCheck: [].} =
     discard
-var nameless: proc () {.raises: [].} = proc () {.forceCheck: [].} =
+
+var procLambda: proc () {.raises: [].} = proc () {.forceCheck: [].} =
     discard
+
 proc `!`(a: int) {.forceCheck: [].} =
     discard
 
-proc raises() {.forceCheck: [KeyError].} =
+proc raises() {.forceCheck: [
+    KeyError
+].} =
     raise newException(KeyError, "")
-proc publicRaises*() {.forceCheck: [KeyError].} =
+
+proc publicRaises*() {.forceCheck: [
+    KeyError
+].} =
     raise newException(KeyError, "")
 
 func funcEmpty() {.forceCheck: [].} =
     discard
+
 func funcPublicEmpty*() {.forceCheck: [].} =
     discard
-func funcUnneeded() {.forceCheck: [OSError].} =
+
+func funcUnneeded() {.forceCheck: [
+    OSError
+].} =
     discard
+
 func funcMultitype(a: int or string) {.forceCheck: [].} =
     discard
-var funcNameless: proc () {.noSideEffect.} = func () {.forceCheck: [].} =
+
+var funcLambda: proc () {.noSideEffect.} = func () {.forceCheck: [].} =
     discard
+
 func `@`*(a: int) {.forceCheck: [].} =
     discard
 
-func funcRaises() {.forceCheck: [KeyError].} =
+func funcRaises() {.forceCheck: [
+    KeyError
+].} =
     raise newException(KeyError, "")
-func funcPublicRaises*() {.forceCheck: [KeyError].} =
+
+func funcPublicRaises*() {.forceCheck: [
+    KeyError
+].} =
     raise newException(KeyError, "")
 
 empty()
 publicEmpty()
 unneeded()
 multitype(5)
-nameless()
+procLambda()
 !5
 
 funcEmpty()
 funcPublicEmpty()
 funcUnneeded()
 funcMultitype("x")
-funcNameless()
+funcLambda()
 @5
 
 raises()
