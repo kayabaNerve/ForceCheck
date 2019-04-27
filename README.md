@@ -21,3 +21,5 @@ As some exceptions shouldn't be handled, irrecoverable exceptions, it's possible
 ].}
 ```
 The irrecoverable exception must be specified in every function it bubbles up through, as well as the function that raises it.
+
+This library also includes `fcRaise`, a custom version of `raise` to get around https://github.com/nim-lang/Nim/issues/11118 without affecting the raises pragma. It was originally going to be an independent macro, yet was merged for compatibility with the `forceCheck` macro. It's a drop in replacement for `raise`s in `raise e` situations, where `e` is an Exception capture via `as`.

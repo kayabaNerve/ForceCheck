@@ -77,6 +77,18 @@ proc removeRaises(
         parent[index] = replacement
         return
 
+    #If this is an fcRaise statament, replace it as well.
+    if (
+        (parent[index].kind == nnkCommand) and
+        (parent[index][0].kind == nnkIdent) and
+        (parent[index][0].strVal == "fcRaise")
+    ):
+        var replacement: NimNode = newNimNode(nnkDiscardStmt)
+        parent[index].del(0)
+        parent[index].copyChildrenTo(replacement)
+        parent[index] = replacement
+        return
+
     #Iterate over every child and do the same there.
     for i in 0 ..< parent[index].len:
         removeRaises(parent[index], i)
@@ -253,3 +265,18 @@ macro forceCheck*(
     )
 
     return original
+
+#Custom version of raise meant as a temporary solution to https://github.com/nim-lang/Nim/issues/11118.
+macro fcRaise*(
+    e: typed
+): untyped =
+    newNimNode(nnkRaiseStmt).add(
+        newNimNode(nnkCall).add(
+            newIdentNode("newException"),
+            newIdentNode(e.getTypeInst()[0].strVal),
+            newNimNode(nnkDotExpr).add(
+                newIdentNode(e.strVal),
+                newIdentNode("msg")
+            )
+        )
+    )
