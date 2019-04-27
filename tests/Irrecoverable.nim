@@ -4,7 +4,7 @@ proc called(
     a: int
 ) {.forceCheck: [
     recoverable: [
-        KeyError,
+        IOError,
         ValueError
     ],
     irrecoverable: [
@@ -12,7 +12,7 @@ proc called(
     ]
 ].} =
     if a == 0:
-        raise newException(KeyError, "This is a KeyError.")
+        raise newException(IOError, "This is an IOError.")
     elif a == 1:
         raise newException(ValueError, "This is a ValueError.")
     else:
@@ -20,7 +20,7 @@ proc called(
 
 proc caller() {.forceCheck: [
     recoverable: [
-        KeyError,
+        IOError,
         ValueError
     ],
     irrecoverable: [
@@ -29,7 +29,7 @@ proc caller() {.forceCheck: [
 ].} =
     try:
         called(0)
-    except KeyError as e:
+    except IOError as e:
         raise e
     except ValueError as e:
         raise e

@@ -23,14 +23,14 @@ proc `!`(a: int) {.forceCheck: [].} =
     discard
 
 proc raises() {.forceCheck: [
-    KeyError
+    OSError
 ].} =
-    raise newException(KeyError, "")
+    raise newException(OSError, "")
 
 proc publicRaises*() {.forceCheck: [
-    KeyError
+    OSError
 ].} =
-    raise newException(KeyError, "")
+    raise newException(OSError, "")
 
 func funcEmpty() {.forceCheck: [].} =
     discard
@@ -53,14 +53,14 @@ func `@`*(a: int) {.forceCheck: [].} =
     discard
 
 func funcRaises() {.forceCheck: [
-    KeyError
+    OSError
 ].} =
-    raise newException(KeyError, "")
+    raise newException(OSError, "")
 
 func funcPublicRaises*() {.forceCheck: [
-    KeyError
+    OSError
 ].} =
-    raise newException(KeyError, "")
+    raise newException(OSError, "")
 
 empty()
 publicEmpty()
