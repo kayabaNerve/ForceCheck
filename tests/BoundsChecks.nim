@@ -15,42 +15,37 @@ proc falsePositive() {.forceCheck: [].} =
     discard c
     discard d
 
-proc raisesIE() {.forceCheck: [
-    IndexError
-].} =
-    if false: raise newException(IndexError, "")
-    var mySeq: seq[int] = @[]
-    discard mySeq[5]
+proc testHint() {.boundsCheck.} =
+    fcBoundsOverride:
+        discard
 
-proc irrecoverable() {.forceCheck: [
-    irrecoverable: [
-        IndexError
-    ]
-].} =
+proc raisesIE() {.boundsCheck, forceCheck: [].} =
     var mySeq: seq[int] = @[]
-    discard mySeq[5]
+    try:
+        discard mySeq[5]
+    except IndexError:
+        discard
 
-proc custom() {.forceCheck: [
-    IndexError
-].} =
+proc custom() {.boundsCheck, forceCheck: [].} =
     var mySeq: CustomSeq
-    discard cast[seq[int]](mySeq)[0]
+    try:
+        discard cast[seq[int]](mySeq)[0]
+    except IndexError:
+        discard
 
 proc deref() {.forceCheck: [].} =
     var a: ref int = new(int)
     a[] = 5
 
-proc override() {.forceCheck: [].} =
+proc override() {.boundsCheck, forceCheck: [].} =
     var mySeq: seq[int] = @[0]
     fcBoundsOverride:
         discard mySeq[0]
 
-proc pragmaOverride() {.forceCheck: [], fcBoundsOverride.} =
-    var mySeq: seq[int] = @[0]
-    discard mySeq[0]
-
 proc caller() {.forceCheck: [].} =
     falsePositive()
+
+    testHint()
 
     try:
         raisesIE()
@@ -72,11 +67,6 @@ proc caller() {.forceCheck: [].} =
         discard
 
     try:
-        irrecoverable()
-    except IndexError:
-        echo "Caught irrecoverable."
-
-    try:
         custom()
     except IndexError:
         echo "Caught custom."
@@ -84,7 +74,5 @@ proc caller() {.forceCheck: [].} =
     deref()
 
     override()
-
-    pragmaOverride()
 
 caller()

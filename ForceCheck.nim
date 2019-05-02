@@ -144,79 +144,74 @@ proc insertUncallableRaiseIndexError(
         )
 
 #Recursively checks for `[]` operator usage, and if it finds any, enforces that IndexError is either in the raises OR caught.
-#This function also checks to make sure there's no generic excepts (`except:`).
 proc boundsCheck(
-    function: NimNode,
-    raised: bool
+    parent: NimNode,
+    index: int
 ) {.compileTime.} =
-    #If we don't raise it, we must catch it.
-    if not raised:
-        proc recursiveBoundsCheck(
-            parent: NimNode,
-            index: int
-        ) {.compileTime.} =
-            #If this is an override node, strip the override out and continue.
-            if (
-                (parent[index].kind == nnkCall) and
-                (parent[index].len > 0) and
-                (parent[index][0].kind == nnkIdent) and
-                (parent[index][0].strVal == "fcBoundsOverride")
-            ):
-                #If there's no checked bracket expression in this block, hint it.
-                if not parent[index].hasCheckedBracketExpr():
-                    hint("fcBoundsOverride was used where there's no bounds check to override.")
+    #If this is an override node, strip the override out and continue.
+    if (
+        (parent[index].kind == nnkCall) and
+        (parent[index].len > 0) and
+        (parent[index][0].kind == nnkIdent) and
+        (parent[index][0].strVal == "fcBoundsOverride")
+    ):
+        #If there's no checked bracket expression in this block, hint it.
+        if not parent[index].hasCheckedBracketExpr():
+            hint("fcBoundsOverride was used where there's no bounds check to override.")
 
-                parent[index] = parent[index][1]
-                return
+        parent[index] = parent[index][1]
+        return
 
-            #Is this a try statement which catches IndexError.
-            var tryWithCatch: bool = false
-            #If this is a try statement...
-            if parent[index].kind == nnkTryStmt:
-                #Find the except branch with "IndexError".
-                for child in parent[index]:
-                    if child.kind == nnkStmtList:
-                        continue
+    #Is this a try statement which catches IndexError.
+    var tryWithCatch: bool = false
+    #If this is a try statement...
+    if parent[index].kind == nnkTryStmt:
+        #Find the except branch with "IndexError".
+        for child in parent[index]:
+            if child.kind == nnkStmtList:
+                continue
 
-                    #If this is an except branch, without specifying an error, error.
-                    if (child.kind == nnkExceptBranch) and (child.len == 1):
-                        raise newException(Exception, "Except branches must specify an Exception.")
+            #Generic except.
+            if child.len == 0:
+                tryWithCatch = true
+                break
 
-                    #If there is one, set tryWithCatch.
-                    if child[0].kind == nnkInfix:
-                        if child[0][1].strVal == "IndexError":
-                            tryWithCatch = true
-                            break
-                    elif child[0].strVal == "IndexError":
-                        tryWithCatch = true
-                        break
-            #If this is a checked bracket expr...
-            elif parent[index].isCheckedBracketExpr():
-                raise newException(Exception, "Code can throw IndexError which was not caught.")
+            #If there is one, set tryWithCatch.
+            if child[0].kind == nnkInfix:
+                if child[0][1].strVal == "IndexError":
+                    tryWithCatch = true
+                    break
+            elif child[0].strVal == "IndexError":
+                tryWithCatch = true
+                break
+    #If this is a checked bracket expr...
+    elif parent[index].isCheckedBracketExpr():
+        raise newException(Exception, "Code can throw IndexError which was not caught.")
 
-            #If is a try statement which catches IndexError, we shouldn't check its statement list (item 0).
-            #That said, we do need to add an if false: raise newException(IndexError, "") to stop Nim from thinking IndexError isn't used.
-            var start: int = 0
-            if tryWithCatch:
-                #Set start to 1 so we skip the first child.
-                start = 1
+    #If is a try statement which catches IndexError, we shouldn't check its statement list (item 0).
+    #That said, we do need to add an if false: raise newException(IndexError, "") to stop Nim from thinking IndexError isn't used.
+    var start: int = 0
+    if tryWithCatch:
+        #Set start to 1 so we skip the first child.
+        start = 1
 
-                #Insert an uncallable raise IndexError.
-                parent[index][0].insertUncallableRaiseIndexError()
+        #Insert an uncallable raise IndexError.
+        parent[index][0].insertUncallableRaiseIndexError()
 
-            #Iterate over every child from start and test them.
-            for i in start ..< parent[index].len:
-                recursiveBoundsCheck(parent[index], i)
-        recursiveBoundsCheck(function, 6)
-    #If we did raise it at the function level, we need an uncallable raise at the top of the function.
-    else:
-        function[6].insertUncallableRaiseIndexError()
+    #Iterate over every child from start and test them.
+    for i in start ..< parent[index].len:
+        boundsCheck(parent[index], i)
 
 #Recursively replaces every raise statement in the NimNode with a discard.
+#This function also checks to make sure there's no generic excepts (`except:`).
 proc removeRaises(
     parent: NimNode,
     index: int
 ) {.compileTime.} =
+    #If this is an except branch, without specifying an error, error.
+    if (parent[index].kind == nnkExceptBranch) and (parent[index].len == 1):
+        raise newException(Exception, "Except branches must specify an Exception.")
+
     #If this is a raise statement, replace it with a discard statement.
     if parent[index].kind == nnkRaiseStmt:
         var replacement: NimNode = newNimNode(nnkDiscardStmt)
@@ -253,6 +248,13 @@ proc removeAsync(
     #Iterate over every child and do the same there.
     for i in 0 ..< parent[index].len:
         parent[index].removeAsync(i)
+
+#Turn bounds checks from a fatal error into a managable error.
+macro boundsCheck*(
+    function: untyped
+): untyped =
+    function.boundsCheck(6)
+    return function
 
 #Make sure the proc/func doesn't allow any Exceptions to bubble up.
 macro forceCheck*(
@@ -296,20 +298,6 @@ macro forceCheck*(
         #If types weren't specified, just set both to exceptions.
         else:
             both = exceptions
-
-    #If the fcBoundsOverride pragma isn't present, check to make sure the original function handles bound checks.
-    var fcBoundsOverride: bool = false
-    for p, pragma in original[4]:
-        if (pragma.kind == nnkIdent) and (pragma.strVal == "fcBoundsOverride"):
-            fcBoundsOverride = true
-            original[4].del(p)
-            break
-    if not fcBoundsOverride:
-        var raised: bool = false
-        for child in both.children:
-            if (child.kind == nnkIdent) and (child.strVal == "IndexError"):
-                raised = true
-        original.boundsCheck(raised)
 
     #Copy the function.
     copy = copy(original)

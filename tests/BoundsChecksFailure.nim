@@ -1,6 +1,6 @@
 import ../ForceCheck
 
-proc raisesIE() {.forceCheck: [].} =
+proc raisesIE() {.boundsCheck.} =
     var mySeq: seq[int] = @[]
     discard mySeq[5]
 
