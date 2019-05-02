@@ -62,29 +62,48 @@ proc rename(
 
 #Checks for a bracket expression which is likely to trigger a bound check.
 #This may have false positives, but should never have a false negative.
-proc hasCheckedBracketExpr(
+proc isCheckedBracketExpr(
     node: NimNode
 ): bool {.compileTime.} =
-    #Set a default return value of false.
-    result = false
-
     #If this is a bracket...
     if node.kind == nnkBracketExpr:
         if node[0].kind != nnkIdent:
             return true
 
-        #Override for seq definitons.
-        if node[0].strVal == "seq":
-            discard
-        else:
+        #Switch based on the value.
+        case node[0].strVal:
+            #Overrides for seq definiton/constructor.
+            of "seq":
+                discard
+            of "newSeq":
+                discard
+            #Override for array definition.
+            of "array":
+                discard
+            #Overrides for table definitions/constructors.
+            of "Table":
+                discard
+            of "TableRef":
+                discard
+            of "initTable":
+                discard
+            of "newTable":
+                discard
             #Return true.
-            return true
+            else:
+                return true
 
-    #Check every child.
-    for child in node.children:
-        #If a child has a bracket expr which is checked, return true.
-        if child.hasCheckedBracketExpr():
-            return true
+#Recursively checks this node and every child to see if it's a checked bracket expr.
+proc hasCheckedBracketExpr(
+    node: NimNode
+): bool {.compileTime.} =
+    result = node.isCheckedBracketExpr()
+    if not result:
+        #Check every child.
+        for child in node.children:
+            #If a child has a bracket expr which is checked, return true.
+            if child.hasCheckedBracketExpr():
+                return true
 
 #Inserts `if false: raise newException(IndexError, "")` to disable XDeclaredButNotUsed hints.
 #If there is no `[]` used, it does nothing/
@@ -167,11 +186,9 @@ proc boundsCheck(
                     elif child[0].strVal == "IndexError":
                         tryWithCatch = true
                         break
-            #If this is a bracket...
-            elif parent[index].kind == nnkBracketExpr:
-                #Check if this contains a checked bracket expr.
-                if parent[index].hasCheckedBracketExpr():
-                    raise newException(Exception, "Code can throw IndexError which was not caught.")
+            #If this is a checked bracket expr...
+            elif parent[index].isCheckedBracketExpr():
+                raise newException(Exception, "Code can throw IndexError which was not caught.")
 
             #If is a try statement which catches IndexError, we shouldn't check its statement list (item 0).
             #That said, we do need to add an if false: raise newException(IndexError, "") to stop Nim from thinking IndexError isn't used.
@@ -276,12 +293,18 @@ macro forceCheck*(
         else:
             both = exceptions
 
-    #Check to make sure the original function handles bound checks.
-    var raised: bool = false
-    for child in both.children:
-        if (child.kind == nnkIdent) and (child.strVal == "IndexError"):
-            raised = true
-    original.boundsCheck(raised)
+    #If the fcBoundsOverride pragma isn't present, check to make sure the original function handles bound checks.
+    var fcBoundsOverride: bool = false
+    for p, pragma in original[4]:
+        if (pragma.kind == nnkIdent) and (pragma.strVal == "fcBoundsOverride"):
+            fcBoundsOverride = true
+            original[4].del(p)
+    if not fcBoundsOverride:
+        var raised: bool = false
+        for child in both.children:
+            if (child.kind == nnkIdent) and (child.strVal == "IndexError"):
+                raised = true
+        original.boundsCheck(raised)
 
     #Copy the function.
     copy = copy(original)

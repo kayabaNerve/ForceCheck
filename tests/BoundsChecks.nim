@@ -1,6 +1,19 @@
 import ../ForceCheck
 
+import tables
+
 type CustomSeq = distinct seq[int]
+
+proc falsePositive() {.forceCheck: [].} =
+    var
+        a: seq[int] = @[]
+        b: seq[string] = @["abc"]
+        c: Table[bool, int] = initTable[bool, int]()
+        d: TableRef[string, string] = newTable[string, string]()
+    discard a
+    discard b
+    discard c
+    discard d
 
 proc raisesIE() {.forceCheck: [
     IndexError
@@ -28,7 +41,13 @@ proc override() {.forceCheck: [].} =
     fcBoundsOverride:
         discard mySeq[0]
 
+proc pragmaOverride() {.forceCheck: [], fcBoundsOverride.} =
+    var mySeq: seq[int] = @[0]
+    discard mySeq[0]
+
 proc caller() {.forceCheck: [].} =
+    falsePositive()
+    
     try:
         raisesIE()
     except IndexError:
@@ -59,5 +78,7 @@ proc caller() {.forceCheck: [].} =
         echo "Caught custom."
 
     override()
+
+    pragmaOverride()
 
 caller()
