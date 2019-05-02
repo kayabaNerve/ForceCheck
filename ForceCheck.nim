@@ -67,6 +67,10 @@ proc isCheckedBracketExpr(
 ): bool {.compileTime.} =
     #If this is a bracket...
     if node.kind == nnkBracketExpr:
+        #Confirm it has more than one child.
+        if node.len < 2:
+            return false
+
         if node[0].kind != nnkIdent:
             return true
 
@@ -299,6 +303,7 @@ macro forceCheck*(
         if (pragma.kind == nnkIdent) and (pragma.strVal == "fcBoundsOverride"):
             fcBoundsOverride = true
             original[4].del(p)
+            break
     if not fcBoundsOverride:
         var raised: bool = false
         for child in both.children:

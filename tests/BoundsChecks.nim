@@ -36,6 +36,10 @@ proc custom() {.forceCheck: [
     var mySeq: CustomSeq
     discard cast[seq[int]](mySeq)[0]
 
+proc deref() {.forceCheck: [].} =
+    var a: ref int = new(int)
+    a[] = 5
+
 proc override() {.forceCheck: [].} =
     var mySeq: seq[int] = @[0]
     fcBoundsOverride:
@@ -47,7 +51,7 @@ proc pragmaOverride() {.forceCheck: [], fcBoundsOverride.} =
 
 proc caller() {.forceCheck: [].} =
     falsePositive()
-    
+
     try:
         raisesIE()
     except IndexError:
@@ -76,6 +80,8 @@ proc caller() {.forceCheck: [].} =
         custom()
     except IndexError:
         echo "Caught custom."
+
+    deref()
 
     override()
 
