@@ -153,11 +153,11 @@ proc boundsCheck(
         (parent[index].kind == nnkCall) and
         (parent[index].len > 0) and
         (parent[index][0].kind == nnkIdent) and
-        (parent[index][0].strVal == "fcBoundsOverride")
+        (parent[index][0].strVal == "fcBoundsCheckOverride")
     ):
         #If there's no checked bracket expression in this block, hint it.
         if not parent[index].hasCheckedBracketExpr():
-            hint("fcBoundsOverride was used where there's no bounds check to override.")
+            hint("fcBoundsCheckOverride was used where there's no bounds check to override.")
 
         parent[index] = parent[index][1]
         return

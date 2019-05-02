@@ -16,7 +16,7 @@ proc falsePositive() {.forceCheck: [].} =
     discard d
 
 proc testHint() {.boundsCheck.} =
-    fcBoundsOverride:
+    fcBoundsCheckOverride:
         discard
 
 proc raisesIE() {.boundsCheck, forceCheck: [].} =
@@ -39,7 +39,7 @@ proc deref() {.forceCheck: [].} =
 
 proc override() {.boundsCheck, forceCheck: [].} =
     var mySeq: seq[int] = @[0]
-    fcBoundsOverride:
+    fcBoundsCheckOverride:
         discard mySeq[0]
 
 proc caller() {.forceCheck: [].} =
