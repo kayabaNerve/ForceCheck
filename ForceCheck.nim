@@ -60,16 +60,137 @@ proc rename(
     #Or, if it's not an operator, just overwrite it with a standard ident node.
     function[0] = name
 
-#Recursively replaces every raise statement in the NimNode with a discard.
+#Checks for a bracket expression which is likely to trigger a bound check.
+#This may have false positives, but should never have a false negative.
+proc hasCheckedBracketExpr(
+    node: NimNode
+): bool {.compileTime.} =
+    #Set a default return value of false.
+    result = false
+
+    #If this is a bracket...
+    if node.kind == nnkBracketExpr:
+        if node[0].kind != nnkIdent:
+            return true
+
+        #Override for seq definitons.
+        if node[0].strVal == "seq":
+            discard
+        else:
+            #Return true.
+            return true
+
+    #Check every child.
+    for child in node.children:
+        #If a child has a bracket expr which is checked, return true.
+        if child.hasCheckedBracketExpr():
+            return true
+
+#Inserts `if false: raise newException(IndexError, "")` to disable XDeclaredButNotUsed hints.
+#If there is no `[]` used, it does nothing/
+proc insertUncallableRaiseIndexError(
+    node: NimNode
+) {.compileTime.} =
+    if node.hasCheckedBracketExpr():
+        node.insert(
+            0,
+            newNimNode(
+                nnkIfStmt
+            ).add(
+                newNimNode(
+                    nnkElifBranch
+                ).add(
+                    newIdentNode("false"),
+                    newNimNode(
+                        nnkStmtList
+                    ).add(
+                        newNimNode(
+                            nnkRaiseStmt
+                        ).add(
+                            newNimNode(
+                                nnkCall
+                            ).add(
+                                newIdentNode("newException"),
+                                newIdentNode("IndexError"),
+                                newStrLitNode("")
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+#Recursively checks for `[]` operator usage, and if it finds any, enforces that IndexError is either in the raises OR caught.
 #This function also checks to make sure there's no generic excepts (`except:`).
+proc boundsCheck(
+    function: NimNode,
+    raised: bool
+) {.compileTime.} =
+    #If we don't raise it, we must catch it.
+    if not raised:
+        proc recursiveBoundsCheck(
+            parent: NimNode,
+            index: int
+        ) {.compileTime.} =
+            #If this is an override node, strip the override out and continue.
+            if (parent[index].kind == nnkCall) and (parent[index][0].strVal == "fcBoundsOverride"):
+                #If there's no checked bracket expression in this block, hint it.
+                if not parent[index].hasCheckedBracketExpr():
+                    hint("fcBoundsOverride was used where there's no bounds check to override.")
+
+                parent[index] = parent[index][1]
+                return
+
+            #Is this a try statement which catches IndexError.
+            var tryWithCatch: bool = false
+            #If this is a try statement...
+            if parent[index].kind == nnkTryStmt:
+                #Find the except branch with "IndexError".
+                for child in parent[index]:
+                    if child.kind == nnkStmtList:
+                        continue
+
+                    #If this is an except branch, without specifying an error, error.
+                    if (child.kind == nnkExceptBranch) and (child.len == 1):
+                        raise newException(Exception, "Except branches must specify an Exception.")
+
+                    #If there is one, set tryWithCatch.
+                    if child[0].kind == nnkInfix:
+                        if child[0][1].strVal == "IndexError":
+                            tryWithCatch = true
+                            break
+                    elif child[0].strVal == "IndexError":
+                        tryWithCatch = true
+                        break
+            #If this is a bracket...
+            elif parent[index].kind == nnkBracketExpr:
+                #Check if this contains a checked bracket expr.
+                if parent[index].hasCheckedBracketExpr():
+                    raise newException(Exception, "Code can throw IndexError which was not caught.")
+
+            #If is a try statement which catches IndexError, we shouldn't check its statement list (item 0).
+            #That said, we do need to add an if false: raise newException(IndexError, "") to stop Nim from thinking IndexError isn't used.
+            var start: int = 0
+            if tryWithCatch:
+                #Set start to 1 so we skip the first child.
+                start = 1
+
+                #Insert an uncallable raise IndexError.
+                parent[index][0].insertUncallableRaiseIndexError()
+
+            #Iterate over every child from start and test them.
+            for i in start ..< parent[index].len:
+                recursiveBoundsCheck(parent[index], i)
+        recursiveBoundsCheck(function, 6)
+    #If we did raise it at the function level, we need an uncallable raise at the top of the function.
+    else:
+        function[6].insertUncallableRaiseIndexError()
+
+#Recursively replaces every raise statement in the NimNode with a discard.
 proc removeRaises(
     parent: NimNode,
     index: int
 ) {.compileTime.} =
-    #If this is an except branch, without specifying an error, error.
-    if (parent[index].kind == nnkExceptBranch) and (parent[index].len == 1):
-        raise newException(Exception, "Except branches must specify an Exception.")
-
     #If this is a raise statement, replace it with a discard statement.
     if parent[index].kind == nnkRaiseStmt:
         var replacement: NimNode = newNimNode(nnkDiscardStmt)
@@ -115,13 +236,50 @@ macro forceCheck*(
     var
         #Boolean of whether or not this function is async.
         async: bool
-        #Copy the original function.
-        copy: NimNode = copy(original)
+        #Copy of the original function.
+        copy: NimNode
         #Define a second copy if this is async (explained below).
         asyncCopy: NimNode
         #Create arrays for both recoverable/irrecoverable exceptions, and just irrecoverable.
         both: NimNode = newNimNode(nnkBracket)
         irrecoverable: NimNode = newNimNode(nnkBracket)
+
+    #Grab the Exceptions.
+    #Check to make sure this isn't an empty array.
+    if exceptions.len > 0:
+        #Check if recoverable/irrecoverable was specified.
+        if exceptions[0].kind == nnkExprColonExpr:
+            case exceptions[0][0].strVal:
+                of "recoverable":
+                    for i in 0 ..< exceptions[0][1].len:
+                        both.add(exceptions[0][1][i])
+                of "irrecoverable":
+                    for i in 0 ..< exceptions[0][1].len:
+                        both.add(exceptions[0][1][i])
+                        irrecoverable.add(exceptions[0][1][i])
+
+            #Allow passing just irrecoverable.
+            if exceptions.len > 1:
+                if exceptions[1][0].strVal == "recoverable":
+                    for i in 0 ..< exceptions[1][1].len:
+                        both.add(exceptions[1][1][i])
+                else:
+                    for i in 0 ..< exceptions[1][1].len:
+                        both.add(exceptions[1][1][i])
+                        irrecoverable.add(exceptions[1][1][i])
+        #If types weren't specified, just set both to exceptions.
+        else:
+            both = exceptions
+
+    #Check to make sure the original function handles bound checks.
+    var raised: bool = false
+    for child in both.children:
+        if (child.kind == nnkIdent) and (child.strVal == "IndexError"):
+            raised = true
+    original.boundsCheck(raised)
+
+    #Copy the function.
+    copy = copy(original)
 
     #Rename it.
     copy.rename(original.getName() & "_forceCheck")
@@ -159,33 +317,6 @@ macro forceCheck*(
         #The first checks bubble up, the second checks that all possible Exceptions were placed in forceCheck (guaranteeing it's a drop-in replacement for raises).
         asyncCopy = copy(copy)
         asyncCopy.rename(original.getName() & "_asyncForceCheck")
-
-    #Grab the Exceptions.
-    #Check to make sure this isn't an empty array.
-    if exceptions.len > 0:
-        #Check if recoverable/irrecoverable was specified.
-        if exceptions[0].kind == nnkExprColonExpr:
-            case exceptions[0][0].strVal:
-                of "recoverable":
-                    for i in 0 ..< exceptions[0][1].len:
-                        both.add(exceptions[0][1][i])
-                of "irrecoverable":
-                    for i in 0 ..< exceptions[0][1].len:
-                        both.add(exceptions[0][1][i])
-                        irrecoverable.add(exceptions[0][1][i])
-
-            #Allow passing just irrecoverable.
-            if exceptions.len > 1:
-                if exceptions[1][0].strVal == "recoverable":
-                    for i in 0 ..< exceptions[1][1].len:
-                        both.add(exceptions[1][1][i])
-                else:
-                    for i in 0 ..< exceptions[1][1].len:
-                        both.add(exceptions[1][1][i])
-                        irrecoverable.add(exceptions[1][1][i])
-        #If types weren't specified, just set both to exceptions.
-        else:
-            both = exceptions
 
     #Add the proper pragma to the original function if it's not async, or the asyncCopy if the original is.
     if not async:

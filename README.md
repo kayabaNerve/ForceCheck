@@ -22,4 +22,6 @@ As some exceptions shouldn't be handled, irrecoverable exceptions, it's possible
 ```
 The irrecoverable exception must be specified in every function it bubbles up through, as well as the function that raises it.
 
+`forceCheck` also forces user to handle bounds checks. If these are disabled by the compiler, the code will still be generated, but the actual execution will lead to undefined behavior. If you use the C++ backend, this extra code will be zero cost except for a few extra bytes of disk space. In the case that `forceCheck` thinks it found an uncaught bounds check, but didn't, the `fcBoundsOverride` block statement is available, which will disable forced checking of all found 'violations'.
+
 This library also includes `fcRaise`, a custom version of `raise` to get around https://github.com/nim-lang/Nim/issues/11118 without affecting the raises pragma. It was originally going to be an independent macro, yet was merged for compatibility with the `forceCheck` macro. It's a drop in replacement for `raise`s in `raise e` situations, where `e` is an Exception capture via `as`.
