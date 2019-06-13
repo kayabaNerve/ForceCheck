@@ -40,6 +40,13 @@ proc rename(
         function.copyChildrenTo(functionCopy)
         function = functionCopy
 
+    #If it's a module, it must be at the top level.
+    #Therefore, we must convert it to a proc.
+    if function.kind == nnkMethodDef:
+        var functionCopy: NimNode = newNimNode(nnkProcDef)
+        function.copyChildrenTo(functionCopy)
+        function = functionCopy
+
     #If it's a private operator, rename it, but preserve it as an operator.
     if function[0].kind == nnkAccQuoted:
         function[0] = newNimNode(
