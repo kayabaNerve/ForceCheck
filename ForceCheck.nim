@@ -47,6 +47,11 @@ proc rename(
         function.copyChildrenTo(functionCopy)
         function = functionCopy
 
+        #We also need to remove the base pragma, if it exists.
+        for p in 0 ..< function[4].len:
+            if (function[4][p].kind == nnkIdent) and (function[4][p].strVal == "base"):
+                function[4].del(p)
+
     #If it's a private operator, rename it, but preserve it as an operator.
     if function[0].kind == nnkAccQuoted:
         function[0] = newNimNode(
